@@ -22,10 +22,24 @@ class TwitterScraper:
     def setup_driver(self):
         """Setup Chrome driver with appropriate options"""
         chrome_options = Options()
+        # Headless mode settings
+        chrome_options.add_argument('--headless=new')  # Using new headless mode
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--start-maximized')
+        chrome_options.add_argument('--disable-notifications')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--disable-extensions')
+        chrome_options.add_argument('--disable-infobars')
         chrome_options.add_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
+        
+        # Add performance preferences
+        chrome_options.add_experimental_option('prefs', {
+            'profile.default_content_setting_values.notifications': 2,
+            'profile.managed_default_content_settings.images': 2,  # Disable images
+            'disk-cache-size': 4096
+        })
         
         service = Service(ChromeDriverManager().install())
         self.driver = webdriver.Chrome(service=service, options=chrome_options)
