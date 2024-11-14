@@ -11,24 +11,74 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import NoSuchElementException
 
 class TwitterScraper:
-    def __init__(self, username, password):
+    def __init__(self, username, password, verification_username):
         self.username = username
         self.password = password
+        self.verification_username = verification_username
         self.setup_driver()
         self.login()
         
     def setup_driver(self):
         """Setup Chrome driver with appropriate options"""
         chrome_options = Options()
+        
+        # Basic options
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--start-maximized')
         chrome_options.add_argument('--disable-notifications')
+        
+        # Disable loading of images, videos, and other media
+        chrome_prefs = {
+            # "profile.managed_default_content_settings.images": 2,  # Block images
+            "profile.default_content_setting_values.media_stream": 2,  # Block media streams
+            "profile.default_content_setting_values.plugins": 2,  # Block plugins
+            "profile.default_content_setting_values.geolocation": 2,  # Block location
+            "profile.default_content_setting_values.notifications": 2,  # Block notifications
+            "profile.default_content_settings.popups": 2,  # Block popups
+            "profile.default_content_setting_values.automatic_downloads": 2,  # Block downloads
+            "profile.default_content_setting_values.media_stream_mic": 2,  # Block microphone
+            "profile.default_content_setting_values.media_stream_camera": 2,  # Block camera
+            "profile.default_content_setting_values.protocol_handlers": 2,  # Block protocol handlers
+            "profile.default_content_settings.cookies": 1,  # Allow cookies
+            "profile.managed_default_content_settings.javascript": 1,  # Allow JavaScript
+        }
+        
+        # Additional performance options
+        chrome_options.add_argument('--disable-gpu')  # Disable GPU hardware acceleration
+        chrome_options.add_argument('--disable-software-rasterizer')
+        chrome_options.add_argument('--disable-extensions')  # Disable extensions
+        chrome_options.add_argument('--disable-bundled-ppapi-flash')  # Disable Flash
+        chrome_options.add_argument('--disable-plugins')  # Disable plugins
+        chrome_options.add_argument('--disk-cache-size=1')  # Minimize disk cache
+        chrome_options.add_argument('--media-cache-size=1')  # Minimize media cache
+        
+        # Set user agent
         chrome_options.add_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
         
-        service = Service(ChromeDriverManager().install())
-        self.driver = webdriver.Chrome(service=service, options=chrome_options)
-        self.wait = WebDriverWait(self.driver, 20)
+        # Apply preferences
+        chrome_options.add_experimental_option('prefs', chrome_prefs)
+        
+        try:
+            # For Mac ARM (M1/M2)
+            service = Service()
+            chrome_options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            chrome_options.add_argument("--no-sandbox")
+            # chrome_options.add_argument("--headless=new")  # Optional: run in headless mode
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            
+        except Exception as e:
+            print(f"Failed to initialize Chrome driver with default service: {e}")
+            print("Trying alternative initialization...")
+            try:
+                # Fallback to traditional initialization
+                service = Service(ChromeDriverManager().install())
+                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            except Exception as e:
+                print(f"Failed to initialize Chrome driver: {e}")
+                raise
+                
+        self.wait = WebDriverWait(self.driver, 60)
         
     def login(self):
         """Login to Twitter"""
@@ -47,11 +97,16 @@ class TwitterScraper:
             ).click()
             time.sleep(2)
             
-            # Check for verification
+            # Check for unusual login activity verification
             try:
-                verify_input = self.driver.find_element(By.CSS_SELECTOR, 'input[data-testid="ocfEnterTextTextInput"]')
-                print("Verification required! Please enter the verification code in the browser window...")
-                input("Press Enter after completing verification in the browser...")
+                unusual_activity = self.driver.find_element(By.CSS_SELECTOR, 'input[data-testid="ocfEnterTextTextInput"]')
+                if unusual_activity:
+                    print("Username verification required...")
+                    unusual_activity.send_keys(self.verification_username)
+                    self.wait.until(
+                        EC.element_to_be_clickable((By.XPATH, "//span[text()='Next']"))
+                    ).click()
+                    time.sleep(2)
             except NoSuchElementException:
                 pass
                 
@@ -66,6 +121,14 @@ class TwitterScraper:
             ).click()
             time.sleep(3)
             
+            # Check for verification code input (still keep this for other types of verification)
+            try:
+                verify_input = self.driver.find_element(By.CSS_SELECTOR, 'input[data-testid="ocfEnterTextTextInput"]')
+                print("Additional verification required! Please enter the verification code in the browser window...")
+                input("Press Enter after completing verification in the browser...")
+            except NoSuchElementException:
+                pass
+                
             # Verify login
             self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="SideNav_NewTweet_Button"]')))
             print("Successfully logged in!")
@@ -75,112 +138,226 @@ class TwitterScraper:
             raise Exception("Failed to login to Twitter")
             
     def get_all_comments(self, post_url):
-        """Get all comments from a post"""
+        """Get all commenters from the post"""
         self.driver.get(post_url)
         time.sleep(3)
         
-        comments_data = {}
+        comments_data = set()
         last_height = 0
         processed_comments = set()
-        scroll_count = 0
         
-        print("Scrolling and collecting comments...")
+        print("Collecting commenters...")
         
         while True:
-            scroll_count += 1
-            print(f"Scroll #{scroll_count}")
-            
             try:
-                self.wait.until(EC.presence_of_element_located((
-                    By.CSS_SELECTOR, 
-                    'article[data-testid="tweet"]'
-                )))
-                
-                comment_articles = self.driver.find_elements(
-                    By.CSS_SELECTOR, 
-                    'article[data-testid="tweet"]'
+                comment_articles = self.wait.until(
+                    EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'article[data-testid="tweet"]'))
                 )
                 
-            except Exception as e:
-                print(f"Error finding comments on scroll #{scroll_count}: {str(e)}")
-                comment_articles = []
-
-            # Process new comments
-            for article in comment_articles:
-                try:
-                    comment_id = article.get_attribute('aria-labelledby')
-                    if comment_id in processed_comments:
+                # Process new comments
+                for article in comment_articles:
+                    try:
+                        comment_id = article.get_attribute('aria-labelledby')
+                        if comment_id in processed_comments:
+                            continue
+                        
+                        processed_comments.add(comment_id)
+                        
+                        # Get username from the link instead of display name
+                        username_link = article.find_element(
+                            By.CSS_SELECTOR, 
+                            'div[data-testid="User-Name"] a'
+                        ).get_attribute('href')
+                        username = username_link.split('/')[-1]  # Get username from URL
+                        
+                        if username and username not in comments_data:
+                            comments_data.add(username)
+                            print(f"Found commenter: {username}")
+                            
+                    except Exception:
                         continue
                     
-                    processed_comments.add(comment_id)
-                    
-                    username_element = article.find_element(
-                        By.CSS_SELECTOR, 
-                        'div[data-testid="User-Name"] span'
-                    )
-                    username = username_element.text.replace('@', '').strip()
-                    
-                    time_element = article.find_element(By.CSS_SELECTOR, 'time')
-                    timestamp = time_element.get_attribute('datetime')
-                    
-                    if timestamp:
-                        try:
-                            dt = pd.to_datetime(timestamp)
-                            formatted_time = dt.strftime('%H:%M')
-                        except:
-                            formatted_time = timestamp
-                    
-                    if username and timestamp:
-                        comments_data[username] = formatted_time
-                        print(f"Found comment by: {username} at {formatted_time}")
-                        
-                except Exception as e:
-                    continue
-            
-            # Scroll down
-            try:
-                current_height = self.driver.execute_script("return window.pageYOffset;")
-                window_height = self.driver.execute_script("return window.innerHeight;")
-                scroll_height = current_height + (window_height * 0.8)
-                
-                self.driver.execute_script(f"window.scrollTo(0, {scroll_height});")
+                # Scroll down
+                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 time.sleep(2)
                 
                 new_height = self.driver.execute_script("return document.body.scrollHeight")
-                
                 if new_height == last_height:
-                    time.sleep(3)
-                    self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                    time.sleep(3)
-                    final_height = self.driver.execute_script("return document.body.scrollHeight")
-                    
-                    if final_height == new_height:
-                        break
-                        
+                    break
                 last_height = new_height
                 
             except Exception as e:
                 print(f"Error during scrolling: {str(e)}")
                 break
         
-        print(f"\nFound {len(comments_data)} unique comments")
+        print(f"\nFound {len(comments_data)} unique commenters")
+        return list(comments_data)
+
+    def get_pinned_posts_commenters(self, target_users):
+        """Get all commenters from pinned posts (or top post if no pin) of target users"""
+        pinned_posts_data = {}
         
-        # Create and save DataFrame with only the found comments
-        comments_df = pd.DataFrame([
-            {'Username': username, 'Comment_time': time}
-            for username, time in comments_data.items()
-        ])
+        print("\nCollecting comments from posts...")
+        for user in target_users:
+            try:
+                print(f"\nChecking {user}'s posts...")
+                self.driver.get(f"https://twitter.com/{user}")
+                time.sleep(3)
+                
+                # First try to find pinned tweet
+                try:
+                    pinned_section = self.driver.find_element(
+                        By.XPATH, 
+                        "//div[contains(text(), 'Pinned')]//ancestor::article[@data-testid='tweet']"
+                    )
+                    print(f"Found pinned post for {user}")
+                    target_post = pinned_section
+                    
+                except NoSuchElementException:
+                    # If no pinned tweet, get the first tweet
+                    print(f"No pinned post found for {user}, checking top post...")
+                    try:
+                        target_post = self.wait.until(
+                            EC.presence_of_element_located((
+                                By.CSS_SELECTOR, 
+                                'article[data-testid="tweet"]'
+                            ))
+                        )
+                        print(f"Found top post for {user}")
+                    except Exception as e:
+                        print(f"No posts found for {user}: {e}")
+                        pinned_posts_data[user] = set()
+                        continue
+                
+                # Get the tweet link
+                try:
+                    time_link = target_post.find_element(
+                        By.CSS_SELECTOR,
+                        "a[href*='/status/']"
+                    )
+                    tweet_link = time_link.get_attribute('href')
+                    print(f"Post URL: {tweet_link}")
+                    
+                    # Navigate to the post
+                    self.driver.get(tweet_link)
+                    time.sleep(3)
+                    
+                    # Collect commenters
+                    commenters = set()
+                    last_height = 0
+                    scroll_attempts = 0
+                    max_scrolls = 15  # Increased for better coverage
+                    
+                    print("Collecting comments...")
+                    while scroll_attempts < max_scrolls:
+                        try:
+                            comments = self.wait.until(
+                                EC.presence_of_all_elements_located((
+                                    By.CSS_SELECTOR, 
+                                    'article[data-testid="tweet"]'
+                                ))
+                            )[1:]  # Skip the original post
+                            
+                            for comment in comments:
+                                try:
+                                    username_link = comment.find_element(
+                                        By.CSS_SELECTOR, 
+                                        'div[data-testid="User-Name"] a'
+                                    ).get_attribute('href')
+                                    username = username_link.split('/')[-1]
+                                    if username not in commenters:
+                                        commenters.add(username)
+                                        print(f"Found comment by: {username}")
+                                except:
+                                    continue
+                            
+                            # Scroll down
+                            self.driver.execute_script(
+                                "window.scrollTo(0, document.body.scrollHeight);"
+                            )
+                            time.sleep(2)
+                            
+                            new_height = self.driver.execute_script(
+                                "return document.body.scrollHeight"
+                            )
+                            if new_height == last_height:
+                                # Try one more time with a longer wait
+                                time.sleep(3)
+                                self.driver.execute_script(
+                                    "window.scrollTo(0, document.body.scrollHeight);"
+                                )
+                                final_height = self.driver.execute_script(
+                                    "return document.body.scrollHeight"
+                                )
+                                if final_height == new_height:
+                                    break
+                            
+                            last_height = new_height
+                            scroll_attempts += 1
+                            
+                        except Exception as e:
+                            print(f"Error during comment collection: {e}")
+                            break
+                    
+                    pinned_posts_data[user] = commenters
+                    print(f"Found {len(commenters)} commenters on {user}'s post")
+                    
+                except Exception as e:
+                    print(f"Error processing post: {e}")
+                    pinned_posts_data[user] = set()
+                    
+            except Exception as e:
+                print(f"Error accessing {user}'s profile: {e}")
+                pinned_posts_data[user] = set()
+                
+        return pinned_posts_data
+
+    def analyze_engagement(self, post_url, target_users):
+        """Analyze engagement between commenters and target users"""
+        # Get all commenters from main post
+        print("Getting all commenters from the main post...")
+        commenters = self.get_all_comments(post_url)
         
-        if not comments_df.empty:
-            comments_df.sort_values('Comment_time', inplace=True)
-            comments_df.to_csv('twitter_comments.csv', index=False)
-            print("\nComment Analysis:")
-            print(comments_df)
-        else:
-            print("\nNo comments found")
+        if not commenters:
+            print("No commenters found on the main post!")
+            return None
         
-        return comments_data
+        # Get all commenters from pinned/top posts
+        pinned_posts_data = self.get_pinned_posts_commenters(target_users)
+        
+        # Create results DataFrame
+        results = []
+        print("\nAnalyzing engagement...")
+        
+        for commenter in commenters:
+            engagement = {'Username': commenter}
+            false_count = 0
             
+            for target in target_users:
+                # Check if commenter has commented on target's post
+                has_engaged = commenter in pinned_posts_data.get(target, set())
+                engagement[target] = has_engaged
+                if not has_engaged:
+                    false_count += 1
+                    
+            engagement['False_count'] = false_count
+            results.append(engagement)
+            print(f"Analyzed engagement for {commenter}")
+            
+        # Create DataFrame and save to CSV
+        df = pd.DataFrame(results)
+        columns = ['Username'] + target_users + ['False_count']
+        df = df[columns]
+        
+        # Sort by False_count for better readability
+        df = df.sort_values('False_count', ascending=True)
+        
+        df.to_csv('twitter_engagement.csv', index=False)
+        print("\nEngagement Analysis:")
+        print(df)
+        
+        return df
+
     def close(self):
         self.driver.quit()
 
@@ -199,28 +376,30 @@ def load_credentials(env_file='.env'):
             lines = f.readlines()
             return (
                 next((line.split('=')[1].strip() for line in lines if line.startswith('USERNAME=')), ''),
-                next((line.split('=')[1].strip() for line in lines if line.startswith('PASSWORD=')), '')
+                next((line.split('=')[1].strip() for line in lines if line.startswith('PASSWORD=')), ''),
+                next((line.split('=')[1].strip() for line in lines if line.startswith('VERIFICATION_USERNAME=')), '')
             )
     except FileNotFoundError:
         print(f"Error: {env_file} not found!")
-        return '', ''
+        return '', '', ''
 
 def main():
-    print("Twitter Comment Analyzer")
-    print("----------------------")
+    print("Twitter Engagement Analyzer")
+    print("-------------------------")
     
-    post_url, _ = load_data()
-    username, password = load_credentials()
+    post_url, target_users = load_data()
+    username, password, verification_username = load_credentials()
     
-    if not all([post_url, username, password]):
+    if not all([post_url, target_users, username, password]):
         print("Error: Missing required configuration")
         return
         
-    print(f"\nAnalyzing comments for post: {post_url}")
+    print(f"\nAnalyzing engagement for post: {post_url}")
+    print(f"Target users to check engagement with: {', '.join(target_users)}")
     
     try:
-        scraper = TwitterScraper(username, password)
-        scraper.get_all_comments(post_url)
+        scraper = TwitterScraper(username, password, verification_username)
+        scraper.analyze_engagement(post_url, target_users)
         
     except Exception as e:
         print(f"An error occurred: {e}")

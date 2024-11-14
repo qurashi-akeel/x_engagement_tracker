@@ -1,0 +1,25 @@
+A web scrapping Twitter engagement tracker that can automate the process of checking user engagement on my X posts. The tracker should work as follows:
+
+1. **Login to X Account**: The script should be able to log in to my X account securely, using the username, email, and password stored in an environment file (.env). If X asks for additional verification by requesting the username, the script should handle that automatically.
+
+2. **Fetch Post Comments**: Given a specific post (identified by the post URL or ID inside the config.json file), the script should fetch all the usernames of users who have commented on that post, including any spam comments. To do this, the script should auto-scroll the page until all comments have been loaded.
+
+3. **Select Random Users**: The random users to check for engagement will be provided in a config.json file, and the script should use those users.
+
+4. **Check Engagement**: For each commenter on the original post, the script should check if they have commented on the pin post (or the top post if there is no pinned post) of each of the randomly selected users. The result of this check should be recorded as "True" or "False" in a tabular format.
+
+5. **Calculate False Count**: For each commenter, the script should calculate the "False Count" - the number of randomly selected users whose pin/top post the commenter has not interacted with.
+
+6. **Output Data**: The final output should be a table or spreadsheet-like format (terminal output and saved as a csv file), with the following columns:
+   - Commenter Username
+   - Engagement with Random User 1 (True/False)
+   - Engagement with Random User 2 (True/False)
+   - Engagement with Random User 3 (True/False)
+   - Engagement with Random User 4 (True/False)
+   - False Count
+
+7. **Optimization**: Instead of checking for each commenter's engagement with each random user individually, the script should fetch all the comments from the pin/top posts of the random users, compare them, and fill the respective columns in the output table at once. This will significantly reduce the number of scraping attempts and improve the overall performance.
+
+8. **Scalability**: The script should be able to handle a large number of comments (potentially hundreds) without performance issues, thanks to the optimization mentioned in the previous point.
+
+9. **Customization**: The script should allow for easy customization, such as the ability to specify the target post, the random users to check (from the config.json file), and any other relevant parameters.
