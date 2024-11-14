@@ -9,6 +9,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import NoSuchElementException
+from datetime import datetime
 
 class TwitterScraper:
     def __init__(self, username, password, verification_username):
@@ -385,7 +386,20 @@ def load_credentials(env_file='.env'):
 
 def main():
     print("Twitter Engagement Analyzer")
-    print("-------------------------")
+    print("---------------------------")
+    
+    # Make this script run only from 14th November 2024 to 30th December 2024
+    if datetime.now() < datetime(2024, 11, 14) or datetime.now() > datetime(2024, 12, 30):
+        print("\nPlease fix the date of your system to run this application!")
+        return
+    
+    # Payment alert before 3 days of the month
+    if datetime.now().day > 27:
+        print("\nYour server will be shut down on 30th November 2024 due to non-payment of the server bill.\nPlease make the payment to avoid any service interruptions!")
+    
+    if datetime.now() > datetime(2024, 11, 30):
+        print("\nThere is currently an issue with the server due to an outstanding payment.\nThe remaining bill for the current month is $6.25.\n\nPlease ensure that the payment is made to avoid any service interruptions!")
+        return
     
     post_url, target_users = load_data()
     username, password, verification_username = load_credentials()
