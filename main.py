@@ -342,8 +342,18 @@ def load_data(data_file='data.json'):
         with open(data_file, 'r') as f:
             data = json.load(f)
         return data.get('post', ''), data.get('users', [])
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"Error loading data: {e}")
+    except FileNotFoundError:
+        print(f"\nError: {data_file} not found!")
+        print("Please create a data.json file in the same directory as the executable with the following format:")
+        print("""
+{
+    "post": "https://x.com/username/status/123456789",
+    "users": ["user1", "user2", "user3"]
+}
+        """)
+        return '', []
+    except json.JSONDecodeError:
+        print(f"\nError: {data_file} is not valid JSON!")
         return '', []
 
 def load_credentials(env_file='.env'):
@@ -356,7 +366,13 @@ def load_credentials(env_file='.env'):
                 next((line.split('=')[1].strip() for line in lines if line.startswith('VERIFICATION_USERNAME=')), '')
             )
     except FileNotFoundError:
-        print(f"Error: {env_file} not found!")
+        print(f"\nError: {env_file} not found!")
+        print("Please create a .env file in the same directory as the executable with the following format:")
+        print("""
+USERNAME=your_username
+PASSWORD=your_password
+VERIFICATION_USERNAME=your_verification_username
+        """)
         return '', '', ''
 
 def main():

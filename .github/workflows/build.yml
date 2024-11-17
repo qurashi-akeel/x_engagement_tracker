@@ -30,8 +30,6 @@ jobs:
     - name: Build executable
       run: |
         pyinstaller --clean --onefile `
-          --add-data "data.json;." `
-          --add-data ".env;." `
           --hidden-import selenium `
           --hidden-import webdriver_manager `
           --hidden-import pandas `
