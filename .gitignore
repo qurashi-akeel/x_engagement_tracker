@@ -8,3 +8,7 @@ _config.json
 dist/
 build/
 *.spec
+
+__pycache__/
+*.pyc
+twitter_engagement.csv

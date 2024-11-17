@@ -1,0 +1,59 @@
+# Use a Windows-based Python image
+FROM cdrx/pyinstaller-windows:python3
+
+# Set working directory
+WORKDIR /src
+
+# Copy your application files
+COPY . /src/
+
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements-build.txt
+
+# Create spec file
+RUN echo "# -*- mode: python ; coding: utf-8 -*-\n\
+\n\
+a = Analysis(\n\
+    ['main.py'],\n\
+    pathex=[],\n\
+    binaries=[],\n\
+    datas=[('data.json', '.'), ('.env', '.')],\n\
+    hiddenimports=[],\n\
+    hookspath=[],\n\
+    hooksconfig={},\n\
+    runtime_hooks=[],\n\
+    excludes=[],\n\
+    win_no_prefer_redirects=False,\n\
+    win_private_assemblies=False,\n\
+    cipher=None,\n\
+    noarchive=False,\n\
+)\n\
+\n\
+pyz = PYZ(a.pure, a.zipped_data, cipher=None)\n\
+\n\
+exe = EXE(\n\
+    pyz,\n\
+    a.scripts,\n\
+    a.binaries,\n\
+    a.zipfiles,\n\
+    a.datas,\n\
+    [],\n\
+    name='X-Engagement-Tracker',\n\
+    debug=False,\n\
+    bootloader_ignore_signals=False,\n\
+    strip=False,\n\
+    upx=True,\n\
+    upx_exclude=[],\n\
+    runtime_tmpdir=None,\n\
+    console=True,\n\
+    disable_windowed_traceback=False,\n\
+    argv_emulation=False,\n\
+    target_arch=None,\n\
+    codesign_identity=None,\n\
+    entitlements_file=None,\n\
+)" > X-Engagement-Tracker.spec
+
+# Build the executable
+RUN pyinstaller X-Engagement-Tracker.spec
+
+# The executable will be in /src/dist/

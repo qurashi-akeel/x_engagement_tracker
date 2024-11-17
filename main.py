@@ -10,6 +10,8 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.common.exceptions import NoSuchElementException
 from datetime import datetime
+import os
+import sys
 
 class TwitterScraper:
     def __init__(self, username, password, verification_username):
@@ -29,57 +31,30 @@ class TwitterScraper:
         chrome_options.add_argument('--start-maximized')
         chrome_options.add_argument('--disable-notifications')
         
-        # Disable loading of images, videos, and other media
-        chrome_prefs = {
-            # "profile.managed_default_content_settings.images": 2,  # Block images
-            "profile.default_content_setting_values.media_stream": 2,  # Block media streams
-            "profile.default_content_setting_values.plugins": 2,  # Block plugins
-            "profile.default_content_setting_values.geolocation": 2,  # Block location
-            "profile.default_content_setting_values.notifications": 2,  # Block notifications
-            "profile.default_content_settings.popups": 2,  # Block popups
-            "profile.default_content_setting_values.automatic_downloads": 2,  # Block downloads
-            "profile.default_content_setting_values.media_stream_mic": 2,  # Block microphone
-            "profile.default_content_setting_values.media_stream_camera": 2,  # Block camera
-            "profile.default_content_setting_values.protocol_handlers": 2,  # Block protocol handlers
-            "profile.default_content_settings.cookies": 1,  # Allow cookies
-            "profile.managed_default_content_settings.javascript": 1,  # Allow JavaScript
-        }
-        
-        # Additional performance options
-        chrome_options.add_argument('--disable-gpu')  # Disable GPU hardware acceleration
+        # Add these options for executable environment
+        chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('--disable-software-rasterizer')
-        chrome_options.add_argument('--disable-extensions')  # Disable extensions
-        chrome_options.add_argument('--disable-bundled-ppapi-flash')  # Disable Flash
-        chrome_options.add_argument('--disable-plugins')  # Disable plugins
-        chrome_options.add_argument('--disk-cache-size=1')  # Minimize disk cache
-        chrome_options.add_argument('--media-cache-size=1')  # Minimize media cache
-        
-        # Set user agent
-        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36')
-        
-        # Apply preferences
-        chrome_options.add_experimental_option('prefs', chrome_prefs)
+        chrome_options.add_argument('--disable-extensions')
+        chrome_options.add_argument('--disable-plugins')
+        chrome_options.add_argument('--disk-cache-size=1')
+        chrome_options.add_argument('--media-cache-size=1')
+        chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
         
         try:
-            # For Mac ARM (M1/M2)
-            service = Service()
-            chrome_options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-            chrome_options.add_argument("--no-sandbox")
-            # chrome_options.add_argument("--headless=new")  # Optional: run in headless mode
+            if getattr(sys, 'frozen', False):
+                # If running as executable
+                chromedriver_path = os.path.join(sys._MEIPASS, "chromedriver.exe")
+                service = Service(chromedriver_path)
+            else:
+                # If running as script
+                service = Service(ChromeDriverManager().install())
+                
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            self.wait = WebDriverWait(self.driver, 60)
             
         except Exception as e:
-            print(f"Failed to initialize Chrome driver with default service: {e}")
-            print("Trying alternative initialization...")
-            try:
-                # Fallback to traditional initialization
-                service = Service(ChromeDriverManager().install())
-                self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            except Exception as e:
-                print(f"Failed to initialize Chrome driver: {e}")
-                raise
-                
-        self.wait = WebDriverWait(self.driver, 60)
+            print(f"Failed to initialize Chrome driver: {e}")
+            raise
         
     def login(self):
         """Login to Twitter"""
